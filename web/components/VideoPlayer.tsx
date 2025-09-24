@@ -105,7 +105,7 @@ const VideoPlayer: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border-2 border-black rounded-lg p-6">
+      <div className="bg-background  border-2 border-black rounded-lg p-6">
         <h2 className="text-xl font-bold mb-4">Premium Video Player</h2>
         
         {/* Video Player */}
@@ -202,37 +202,6 @@ const VideoPlayer: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
-
-      {/* How it works */}
-      <div className="bg-gray-100 border-2 border-gray-300 rounded-lg p-6">
-        <h3 className="font-bold mb-4">How Video Streaming Works</h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-start gap-3">
-            <span className="bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">1</span>
-            <div>
-              <strong>Request Video:</strong> Click "Load Premium Video" to request access
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">2</span>
-            <div>
-              <strong>Payment Required:</strong> Server responds with 402 Payment Required (0.05 APT)
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">3</span>
-            <div>
-              <strong>Auto Payment:</strong> x402 client automatically handles payment and retries
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">4</span>
-            <div>
-              <strong>Video Stream:</strong> Server streams the video with range requests for smooth playback
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
