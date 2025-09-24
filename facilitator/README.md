@@ -1,226 +1,239 @@
-# x402 Aptos Facilitator
+# @x402/aptos-facilitator
 
-A middleware service for the x402 protocol on Aptos blockchain that handles payment verification and transaction submission.
-
-## What the Facilitator Does
-
-The **Facilitator** is the third service in the x402 protocol that:
-
-1. **Receives signed transactions** from clients via the server
-2. **Submits transactions to the Aptos blockchain**
-3. **Verifies transactions are successful**
-4. **Notifies the server** to proceed with resource access
+A TypeScript SDK for implementing x402 payment protocol on Aptos blockchain. This SDK provides easy-to-use middleware and utilities for handling payment verification in your Express.js applications.
 
 ## Features
 
-- **Mock Mode**: For testing - always returns successful verification
-- **Express Middleware**: Easy integration with Express.js servers
-- **Aptos Integration**: Built on Aptos TypeScript SDK
-- **Route-based Pricing**: Define different prices for different endpoints
-- **Transaction Verification**: Verifies blockchain transactions
+- 🔐 **Payment Verification**: Verify Aptos blockchain transactions
+- 🛡️ **Express Middleware**: Drop-in middleware for Express.js applications
+- 🌐 **Multi-Network Support**: Works with Aptos mainnet, testnet, and devnet
+- 📦 **TypeScript Support**: Full TypeScript definitions included
+- 🧪 **Mock Mode**: Built-in testing mode for development
+- ⚡ **Easy Integration**: Simple API for quick setup
 
 ## Installation
 
 ```bash
-cd facilitator
-npm install
+npm install @x402/aptos-facilitator
+# or
+yarn add @x402/aptos-facilitator
 ```
 
 ## Quick Start
 
-### 1. Basic Server Setup
+### Basic Setup
 
 ```typescript
 import express from 'express';
-import { paymentMiddleware } from './src';
+import { AptosFacilitator, paymentMiddleware } from '@x402/aptos-facilitator';
 
 const app = express();
 
-// Define payment routes
+// Configure payment routes
 const paymentRoutes = {
-  "GET /weather": {
-    price: "1000000", // 0.01 APT in octas
-    network: "aptos-testnet"
+  '/premium-content': {
+    price: '1000000', // 1 APT (in micro-APT)
+    network: 'aptos-testnet'
   },
-  "/premium/*": {
-    price: {
-      amount: "10000000", // 0.1 APT
-      asset: {
-        address: "0x1::aptos_coin::AptosCoin",
-        decimals: 8
-      }
-    },
-    network: "aptos-testnet"
+  '/api/data': {
+    price: '500000', // 0.5 APT
+    network: 'aptos-testnet'
   }
 };
 
-// Apply middleware
+// Add payment middleware
 app.use(paymentMiddleware(
-  "0x1234567890abcdef1234567890abcdef12345678", // Payment address
+  '0x123...', // Your Aptos address to receive payments
   paymentRoutes,
-  { url: "http://localhost:3001" }
+  { url: 'https://your-server.com' }
 ));
 
-// Your routes
-app.get("/weather", (req, res) => {
-  res.send({ weather: "sunny" });
+// Your protected routes
+app.get('/premium-content', (req, res) => {
+  res.json({ 
+    message: 'This content requires payment!',
+    transactionHash: req.transactionHash 
+  });
 });
+
+app.listen(3000);
 ```
 
-### 2. Run Example Server
+### Using the Facilitator Directly
 
-```bash
-npm run dev
-```
-
-The server will start on `http://localhost:4021` with mock payment verification enabled.
-
-## API Reference
-
-### PaymentMiddleware
-
-#### Constructor
 ```typescript
-paymentMiddleware(
-  payTo: string,           // Payment recipient address
-  routes: PaymentRoutes,   // Route pricing configuration
-  options: PaymentOptions  // Facilitator options
-)
-```
+import { AptosFacilitator } from '@x402/aptos-facilitator';
 
-#### PaymentRoutes
-```typescript
-interface PaymentRoutes {
-  [path: string]: {
-    price: string | {
-      amount: string;
-      asset: {
-        address: string;
-        decimals: number;
-      };
-    };
-    network: 'aptos-mainnet' | 'aptos-testnet' | 'aptos-devnet';
-  };
+const facilitator = new AptosFacilitator({
+  aptosNetwork: 'testnet',
+  port: 3000,
+  mockMode: true // Set to false for production
+});
+
+// Process a payment
+const paymentRequest = {
+  transaction: '...', // Serialized transaction
+  signature: '...',   // Transaction signature
+  publicKey: '...',   // Public key
+  address: '...',     // Sender address
+  timestamp: Date.now()
+};
+
+const verification = await facilitator.processPayment(paymentRequest);
+
+if (verification.isValid) {
+  console.log('Payment verified!', verification.transactionHash);
+} else {
+  console.log('Payment failed:', verification.error);
 }
 ```
 
+## API Reference
+
 ### AptosFacilitator
+
+The main class for handling payment verification.
+
+#### Constructor
+
+```typescript
+new AptosFacilitator(config: FacilitatorConfig)
+```
+
+#### Configuration
+
+```typescript
+interface FacilitatorConfig {
+  aptosNetwork: 'mainnet' | 'testnet' | 'devnet';
+  port: number;
+  mockMode?: boolean; // For testing - always returns true
+}
+```
 
 #### Methods
 
-##### `processPayment(paymentRequest: PaymentRequest): Promise<PaymentVerification>`
-Process a payment request and return verification result.
+- `processPayment(paymentRequest: PaymentRequest): Promise<PaymentVerification>`
+- `isTransactionConfirmed(transactionHash: string): Promise<boolean>`
+- `getTransactionDetails(transactionHash: string): Promise<any>`
 
-##### `isTransactionConfirmed(transactionHash: string): Promise<boolean>`
-Check if a transaction is confirmed on the blockchain.
+### Payment Middleware
 
-##### `getTransactionDetails(transactionHash: string): Promise<any>`
-Get detailed transaction information.
+Express middleware for handling x402 payments.
 
-## Configuration
-
-### Environment Variables
-
-```bash
-# Required
-FACILITATOR_URL=http://localhost:3001
-ADDRESS=0x1234567890abcdef1234567890abcdef12345678
-
-# Optional
-PORT=4021
-APTOS_NETWORK=testnet
+```typescript
+paymentMiddleware(
+  payTo: string,           // Address to receive payments
+  routes: PaymentRoutes,   // Route configuration
+  options: PaymentMiddlewareOptions
+)
 ```
 
-### Mock Mode
+#### Route Configuration
 
-The facilitator runs in mock mode by default for testing. In mock mode:
-- All payment verifications return `true`
-- Mock transaction hashes are generated
-- No actual blockchain transactions are submitted
+```typescript
+interface PaymentRoutes {
+  [path: string]: PaymentRoute;
+}
 
-To disable mock mode, set `mockMode: false` in the facilitator config.
+interface PaymentRoute {
+  price: string | {
+    amount: string;
+    asset: {
+      address: string;
+      decimals: number;
+    };
+  };
+  network: 'aptos-mainnet' | 'aptos-testnet' | 'aptos-devnet';
+}
+```
 
-## How It Works
+## Examples
 
-### 1. Client Request
-Client makes HTTP request to server.
+### Advanced Route Configuration
 
-### 2. Payment Required (402)
-If route requires payment, server responds with 402 and payment details.
+```typescript
+const paymentRoutes = {
+  // Simple price
+  '/basic': {
+    price: '1000000',
+    network: 'aptos-testnet'
+  },
+  
+  // Custom asset
+  '/premium': {
+    price: {
+      amount: '1000000',
+      asset: {
+        address: '0x1::aptos_coin::AptosCoin',
+        decimals: 8
+      }
+    },
+    network: 'aptos-mainnet'
+  },
+  
+  // Wildcard routes
+  '/api/*': {
+    price: '500000',
+    network: 'aptos-testnet'
+  }
+};
+```
 
-### 3. Client Payment
-Client creates and signs Aptos transaction, sends in `X-Payment` header.
+### Custom Payment Handler
 
-### 4. Facilitator Processing
-- Server forwards payment to facilitator
-- Facilitator verifies signature
-- Facilitator submits transaction to Aptos blockchain
-- Facilitator confirms transaction success
+```typescript
+import { AptosFacilitator } from '@x402/aptos-facilitator';
 
-### 5. Resource Access
-If payment is verified, server grants access to requested resource.
+const facilitator = new AptosFacilitator({
+  aptosNetwork: 'mainnet',
+  port: 3000,
+  mockMode: false
+});
 
-## Example Usage
-
-### Testing with curl
-
-```bash
-# First request - will get 402
-curl http://localhost:4021/weather
-
-# Response:
-# {
-#   "payment": {
-#     "amount": "1000000",
-#     "token": "0x1::aptos_coin::AptosCoin",
-#     "recipient": "0x1234...",
-#     "deadline": 1234567890
-#   },
-#   "message": "Payment required to access this resource"
-# }
-
-# Second request with payment (mock)
-curl -H "X-Payment: {\"transaction\":\"...\",\"signature\":\"...\",\"address\":\"0x...\"}" \
-     http://localhost:4021/weather
-
-# Response:
-# {
-#   "report": {
-#     "weather": "sunny",
-#     "temperature": 70
-#   },
-#   "payment": {
-#     "transactionHash": "0x...",
-#     "verified": true
-#   }
-# }
+app.post('/custom-payment', async (req, res) => {
+  const { paymentData } = req.body;
+  
+  const verification = await facilitator.processPayment(paymentData);
+  
+  if (verification.isValid) {
+    // Check if transaction is confirmed
+    const isConfirmed = await facilitator.isTransactionConfirmed(
+      verification.transactionHash!
+    );
+    
+    if (isConfirmed) {
+      res.json({ success: true, transactionHash: verification.transactionHash });
+    } else {
+      res.status(402).json({ error: 'Transaction not yet confirmed' });
+    }
+  } else {
+    res.status(402).json({ error: verification.error });
+  }
+});
 ```
 
 ## Development
 
+### Building the SDK
+
 ```bash
-# Install dependencies
-npm install
-
-# Build the project
 npm run build
-
-# Run in development mode
-npm run dev
-
-# Run example server
-npm run dev src/example-server.ts
 ```
 
-## Production Notes
+### Running Tests
 
-- **Security**: Implement proper signature verification
-- **Error Handling**: Add comprehensive error handling
-- **Monitoring**: Add logging and monitoring
-- **Rate Limiting**: Implement rate limiting for payment endpoints
-- **Database**: Store transaction records for audit
+```bash
+npm run dev
+```
 
 ## License
 
 MIT
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For support, please open an issue on GitHub or contact the x402 Protocol team.
