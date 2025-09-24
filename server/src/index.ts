@@ -1,57 +1,18 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
+/**
+ * x402 Aptos Server - Main entry point
+ */
 
-// Load environment variables
-dotenv.config();
+export { PaymentHandler } from './payment-handler';
+export { x402Middleware, createX402Middleware } from './x402-middleware';
+export * from './types';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+// Re-export commonly used types
+export type {
+  PaymentPayload,
+  X402Response,
+  PaymentVerification,
+  ServerConfig,
+  PaymentRoute,
+  PaymentRoutes
+} from './types';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Basic routes
-app.get('/', (req, res) => {
-  res.json({
-    message: 'X402 Aptos Server is running!',
-    version: '1.0.0',
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    path: req.originalUrl
-  });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 X402 Aptos Server running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌐 API base: http://localhost:${PORT}`);
-});
-
-export default app;
