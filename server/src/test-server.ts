@@ -6,31 +6,27 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import { x402Middleware, ServerConfig, PaymentRoutes } from './index';
+import { paymentMiddleware, PaymentRoutes } from 'x402-aptos-facilitator';
 
 // Configuration
-const config: ServerConfig = {
-  port: 4021,
-  facilitatorUrl: process.env.FACILITATOR_URL || 'http://localhost:3001',
-  paymentAddress: process.env.PAYMENT_ADDRESS || '0xbcfb4a60c030cb5dcab8adc7d723fcc6f2bbfa432f595ae8eb1bdc436b928cbd', // Your real Aptos address
-  mockMode: false // REAL MODE - no mocking
-};
+const port = 4021;
+const paymentAddress = process.env.PAYMENT_ADDRESS || '0xbcfb4a60c030cb5dcab8adc7d723fcc6f2bbfa432f595ae8eb1bdc436b928cbd'; // Your real Aptos address
 
 // Define payment routes
 const paymentRoutes: PaymentRoutes = {
-  "GET /weather": {
+  "/weather": {
     price: "1000000", // 0.01 APT in octas
-    description: "Weather data"
+    network: "aptos-testnet"
   },
-  "GET /premium/*": {
+  "/premium/*": {
     price: "10000000", // 0.1 APT in octas
-    description: "Premium content"
+    network: "aptos-testnet"
   },
-  "POST /api/process": {
+  "/api/process": {
     price: "5000000", // 0.05 APT in octas
-    description: "Data processing"
+    network: "aptos-testnet"
   },
-  "GET /data/analytics": {
+  "/data/analytics": {
     price: {
       amount: "2000000", // 0.02 APT
       asset: {
@@ -38,11 +34,11 @@ const paymentRoutes: PaymentRoutes = {
         decimals: 8
       }
     },
-    description: "Analytics data"
+    network: "aptos-testnet"
   },
-  "GET /video": {
+  "/video": {
     price: "5000000", // 0.05 APT in octas
-    description: "Premium video content"
+    network: "aptos-testnet"
   }
 };
 
@@ -52,8 +48,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Apply x402 payment middleware
-app.use(x402Middleware(config, paymentRoutes));
+// Apply x402 payment middleware using the SDK
+app.use(paymentMiddleware(
+  paymentAddress,
+  paymentRoutes,
+  { url: `http://localhost:${port}` }
+));
 
 // Routes
 app.get("/weather", (req, res) => {
@@ -243,11 +243,10 @@ app.use((req, res) => {
 });
 
 // Start server
-app.listen(config.port, () => {
-  console.log(`🚀 x402 Aptos Test Server running on http://localhost:${config.port}`);
-  console.log(`💰 Payment address: ${config.paymentAddress}`);
-  console.log(`🔧 Facilitator URL: ${config.facilitatorUrl}`);
-  console.log(`🔧 Mock mode: ${config.mockMode ? 'ENABLED' : 'DISABLED'}`);
+app.listen(port, () => {
+  console.log(`🚀 x402 Aptos Test Server running on http://localhost:${port}`);
+  console.log(`💰 Payment address: ${paymentAddress}`);
+  console.log(`🔧 Using @x402/aptos-facilitator SDK`);
   
   console.log(`\n📋 Available endpoints:`);
   console.log(`   GET  /weather          - Weather data (0.01 APT)`);
@@ -260,11 +259,11 @@ app.listen(config.port, () => {
   
   console.log(`\n🧪 Test with curl:`);
   console.log(`   # First request - will get 402`);
-  console.log(`   curl http://localhost:${config.port}/weather`);
+  console.log(`   curl http://localhost:${port}/weather`);
   console.log(`   `);
   console.log(`   # Second request with mock payment`);
   console.log(`   curl -H "X-Payment: {\\"transaction\\":\\"...\\",\\"signature\\":\\"...\\",\\"address\\":\\"0x...\\"}" \\`);
-  console.log(`        http://localhost:${config.port}/weather`);
+  console.log(`        http://localhost:${port}/weather`);
 });
 
 export default app;
