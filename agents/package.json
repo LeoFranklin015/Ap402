@@ -1,0 +1,39 @@
+{
+  "name": "agents",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node dist/gmail/index.js",
+    "dev": "ts-node gmail/index.ts",
+    "dev:twitter": "ts-node twitter/index.ts",
+    "dev:website": "ts-node website/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.19",
+    "@langchain/openai": "^0.3.14",
+    "ai": "^4.3.16",
+    "algosdk": "^2.7.0",
+    "composio-core": "^0.5.39",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "openai": "^4.69.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "twitter-api-v2": "^1.24.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.0"
+  }
+}
