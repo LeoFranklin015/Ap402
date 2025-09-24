@@ -142,6 +142,63 @@ app.get("/data/analytics", (req, res) => {
   });
 });
 
+// Video streaming endpoint (requires payment)
+app.get("/video", (req, res) => {
+  try {
+    // Path to the video file (you'll need to add a sample video)
+    const videoPath = path.join(__dirname, "../assets/sample-video.mp4");
+
+    // Check if video file exists
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({
+        error: "Video not found",
+        message: "The requested video file is not available",
+      });
+    }
+
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // Parse range header
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = end - start + 1;
+      const file = fs.createReadStream(videoPath, { start, end });
+
+      const head = {
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunksize,
+        "Content-Type": "video/mp4",
+      };
+
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // No range header, send entire file
+      const head = {
+        "Content-Length": fileSize,
+        "Content-Type": "video/mp4",
+      };
+
+      res.writeHead(200, head);
+      fs.createReadStream(videoPath).pipe(res);
+    }
+
+    console.log(
+      `🎥 Video streamed for payment: ${(req as any).transactionHash}`
+    );
+  } catch (error) {
+    console.error("Video streaming error:", error);
+    res.status(500).json({
+      error: "Video streaming failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
 
 // Free routes (no payment required)
 app.get("/free", (req, res) => {

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import ConnectButton from "../components/ConnectButton";
 import X402Demo from "../components/X402Demo";
+import VideoPlayer from "../components/VideoPlayer";
 
 export default function Home() {
   return (
@@ -36,6 +37,11 @@ export default function Home() {
         {/* x402 Demo */}
         <div className="w-full max-w-4xl">
           <X402Demo />
+        </div>
+
+        {/* Video Player */}
+        <div className="w-full max-w-4xl">
+          <VideoPlayer />
         </div>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
