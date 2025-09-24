@@ -1,7 +1,5 @@
 import { HeroSection } from "@/components/hero-section"
 import { DashboardPreview } from "@/components/dashboard-preview"
-import { CTASection } from "@/components/cta-section"
-import { FooterSection } from "@/components/footer-section"
 import { AnimatedSection } from "@/components/animated-section"
 
 export default function LandingPage() {

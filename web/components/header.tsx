@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Menu } from "lucide-react"
 import Link from "next/link" // Import Link for client-side navigation
+import ConnectButton from "./ConnectButton"
 
 export function Header() {
   const navItems = [
-    { name: "Video", href: "#video-section" },
-    { name: "Agents", href: "#agents-section" },
+    { name: "Video", href: "/video" },
+    { name: "Agents", href: "/agents" },
   ]
 
   const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -43,11 +44,7 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="https://vercel.com/home" target="_blank" rel="noopener noreferrer" className="hidden md:block">
-            <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 px-6 py-2 rounded-full font-medium shadow-sm">
-              Try for Free
-            </Button>
-          </Link>
+        <ConnectButton />
           <Sheet>
             <SheetTrigger asChild className="md:hidden">
               <Button variant="ghost" size="icon" className="text-foreground">
@@ -70,11 +67,6 @@ export function Header() {
                     {item.name}
                   </Link>
                 ))}
-                <Link href="https://vercel.com/home" target="_blank" rel="noopener noreferrer" className="w-full mt-4">
-                  <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 px-6 py-2 rounded-full font-medium shadow-sm">
-                    Try for Free
-                  </Button>
-                </Link>
               </nav>
             </SheetContent>
           </Sheet>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { WalletReadyState, AdapterWallet, AdapterNotDetectedWallet } from "@aptos-labs/wallet-adapter-core";
 import { Network } from "@aptos-labs/ts-sdk";
@@ -21,6 +22,7 @@ const ConnectButton: React.FC = () => {
   
   const [showWalletList, setShowWalletList] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Close modal when wallet connects
   useEffect(() => {
@@ -28,6 +30,11 @@ const ConnectButton: React.FC = () => {
       setShowWalletList(false);
     }
   }, [connected]);
+
+  // Set mounted state for portal
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleConnect = async (wallet: Wallet) => {
     try {
@@ -81,7 +88,7 @@ const ConnectButton: React.FC = () => {
   if (connected && account) {
     return (
       <div className="relative">
-        <div className="flex items-center gap-3 bg-black text-white px-6 py-3 rounded-lg border-2 border-black hover:bg-gray-800 transition-colors">
+        <div className="flex items-center gap-3 bg-black text-white px-6 py-2 rounded-full border-2 border-black hover:bg-gray-800 transition-colors font-medium shadow-sm">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span className="text-sm font-medium">Connected</span>
@@ -98,7 +105,7 @@ const ConnectButton: React.FC = () => {
           </div>
           <button
             onClick={handleDisconnect}
-            className="ml-2 p-1 hover:bg-gray-700 rounded transition-colors"
+            className="ml-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
             title="Disconnect"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,10 +114,6 @@ const ConnectButton: React.FC = () => {
           </button>
         </div>
         
-        {/* Network Info */}
-        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-          Network: <span className="font-mono">{network?.name || 'Unknown'}</span>
-        </div>
       </div>
     );
   }
@@ -120,7 +123,7 @@ const ConnectButton: React.FC = () => {
       <button
         onClick={() => setShowWalletList(!showWalletList)}
         disabled={isConnecting}
-        className="flex items-center gap-2 bg-white border-2 border-black text-black hover:bg-black hover:text-white px-8 py-4 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed w-64"
+        className="flex items-center gap-2 bg-white border-2 border-black text-black hover:bg-black hover:text-white px-6 py-2 rounded-full font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         {isConnecting ? (
           <>
@@ -140,9 +143,9 @@ const ConnectButton: React.FC = () => {
         )}
       </button>
 
-      {showWalletList && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl border-2 border-black w-96 max-w-md mx-4">
+      {showWalletList && isMounted && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-black w-96 max-w-md mx-4 relative z-[10000]" style={{ zIndex: 10000 }}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-black">
@@ -169,7 +172,7 @@ const ConnectButton: React.FC = () => {
                     <button
                       key={'name' in wallet ? wallet.name : 'unknown'}
                       onClick={() => handleConnect(wallet)}
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors text-left"
+                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-full transition-colors text-left"
                     >
                       <img
                         src={getWalletIcon(wallet)}
@@ -207,7 +210,7 @@ const ConnectButton: React.FC = () => {
                     <button
                       key={'name' in wallet ? wallet.name : 'unknown'}
                       onClick={() => handleConnect(wallet)}
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors text-left"
+                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-full transition-colors text-left"
                     >
                       <img
                         src={getWalletIcon(wallet)}
@@ -247,7 +250,7 @@ const ConnectButton: React.FC = () => {
                       href={'url' in wallet ? wallet.url : '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors text-left"
+                      className="w-full flex items-center gap-4 p-4 hover:bg-gray-100 border border-gray-200 rounded-full transition-colors text-left"
                     >
                       <img
                         src={getWalletIcon(wallet)}
@@ -285,7 +288,8 @@ const ConnectButton: React.FC = () => {
             )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
