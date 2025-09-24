@@ -6,11 +6,175 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import { paymentMiddleware, PaymentRoutes } from 'x402-aptos-facilitator';
+import { paymentMiddleware, PaymentRoutes, AptosFacilitator } from 'x402-aptos-facilitator';
+import { Aptos, AptosConfig, Network, Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
+import dotenv from 'dotenv';
+import axios from 'axios';
+
+dotenv.config();
 
 // Configuration
 const port = 4021;
 const paymentAddress = process.env.PAYMENT_ADDRESS || '0xbcfb4a60c030cb5dcab8adc7d723fcc6f2bbfa432f595ae8eb1bdc436b928cbd'; // Your real Aptos address
+
+// Initialize facilitator for orchestration
+const facilitator = new AptosFacilitator({
+  aptosNetwork: 'testnet',
+  port: 4021,
+  mockMode: true
+});
+
+// X402 Client for agent communication
+class X402Client {
+  private aptos: Aptos;
+  private account: Account;
+
+  constructor() {
+    // Initialize Aptos client
+    const aptosConfig = new AptosConfig({ network: Network.TESTNET });
+    this.aptos = new Aptos(aptosConfig);
+
+    // Load account from environment variables
+    if (process.env.PrivateKey) {
+      const privateKey = new Ed25519PrivateKey(process.env.PrivateKey);
+      this.account = Account.fromPrivateKey({ privateKey });
+      console.log('🔑 X402 Client initialized with account:', this.account.accountAddress.toString());
+    } else {
+      throw new Error('PrivateKey environment variable is required for X402 client');
+    }
+  }
+
+  // Create payment transaction for agent
+  async createPaymentTransaction(recipient: string, amount: string) {
+    try {
+      console.log(`💰 Creating payment transaction for agent...`);
+      console.log(`   To: ${recipient}`);
+      console.log(`   Amount: ${amount} octas`);
+
+      // Build the transaction
+      const transaction = await this.aptos.transaction.build.simple({
+        sender: this.account.accountAddress.toString(),
+        data: {
+          function: '0x1::coin::transfer',
+          typeArguments: ['0x1::aptos_coin::AptosCoin'],
+          functionArguments: [recipient, BigInt(amount)]
+        }
+      });
+
+      // Sign the transaction
+      const senderAuthenticator = this.aptos.transaction.sign({
+        signer: this.account,
+        transaction
+      });
+
+      return {
+        transaction: JSON.stringify(transaction, (key: string, value: any) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ),
+        signature: JSON.stringify(senderAuthenticator, (key: string, value: any) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ),
+        publicKey: this.account.publicKey.toString(),
+        address: this.account.accountAddress.toString(),
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error('❌ Error creating payment transaction:', error);
+      throw error;
+    }
+  }
+
+  // Make X402 request to agent
+  async request(endpoint: string, options: { method: string; headers?: any; data?: any }) {
+    try {
+      console.log(`🔄 Making X402 request to agent: ${endpoint}`);
+
+      // First attempt - try to get the resource
+      const response = await axios({
+        method: options.method,
+        url: endpoint,
+        headers: options.headers,
+        data: options.data,
+        validateStatus: (status) => status < 500 // Don't throw on 4xx errors
+      });
+
+      if (response.status === 200) {
+        console.log('✅ Agent request successful (no payment required)');
+        return response.data;
+      }
+
+      if (response.status === 402) {
+        console.log('💰 Agent requires payment, processing X402 flow...');
+        
+        // Extract payment details from 402 response
+        const paymentDetails = response.data.payment;
+        if (!paymentDetails) {
+          throw new Error('No payment details in 402 response');
+        }
+
+        // Create payment transaction
+        const paymentTransaction = await this.createPaymentTransaction(
+          paymentDetails.recipient,
+          paymentDetails.amount
+        );
+
+        // Retry request with payment
+        const retryResponse = await axios({
+          method: options.method,
+          url: endpoint,
+          headers: {
+            ...options.headers,
+            'X-Payment': JSON.stringify(paymentTransaction)
+          },
+          data: options.data
+        });
+
+        if (retryResponse.status === 200) {
+          console.log('✅ Agent request successful with payment');
+          return retryResponse.data;
+        } else {
+          throw new Error(`Payment failed: ${retryResponse.status} ${retryResponse.statusText}`);
+        }
+      }
+
+      throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    } catch (error) {
+      console.error('❌ X402 request failed:', error);
+      throw error;
+    }
+  }
+}
+
+// Initialize X402 client
+let x402Client: X402Client | null = null;
+try {
+  x402Client = new X402Client();
+} catch (error) {
+  console.warn('⚠️ X402 Client not initialized:', error instanceof Error ? error.message : 'Unknown error');
+  console.warn('   Agent communication will be limited without proper wallet setup');
+}
+
+// Agents configuration
+const agents = [
+  {
+    name: "Gmail Agent",
+    desc: "This is a Gmail Agent , which can send gmails for you",
+    endpoint: "http://localhost:3004/job",
+    fee: "1000",
+  },
+  {
+    name: "Twitter Agent",
+    desc: "This can go and shill for you on twitter about your events and achievements",
+    endpoint: "http://localhost:3002/job",
+    fee: "1000",
+  },
+  {
+    name: "Website Agent",
+    desc: "This is a website building agent , which can cerate a landing page or registration websites for you",
+    endpoint: "http://localhost:3003/job",
+    fee: "5000",
+  },
+];
 
 // Define payment routes
 const paymentRoutes: PaymentRoutes = {
@@ -39,6 +203,10 @@ const paymentRoutes: PaymentRoutes = {
   "/video": {
     price: "5000000", // 0.05 APT in octas
     network: "aptos-testnet"
+  },
+  "/orchestrate": {
+    price: "10000000", // 0.1 APT in octas - dynamic pricing based on agents used
+    network: "aptos-testnet"
   }
 };
 
@@ -54,6 +222,201 @@ app.use(paymentMiddleware(
   paymentRoutes,
   { url: `http://localhost:${port}` }
 ));
+
+// Helper function to calculate orchestration cost using OpenAI
+async function calculateOrchestrationCost(query: string) {
+  try {
+    // Check if OpenAI API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.log("OpenAI API key not available, using fallback orchestration");
+      return {
+        subqueries: agents.map((agent) => ({
+          agent: agent.name,
+          subquery: `Process: ${query}`,
+          fee: agent.fee,
+          endpoint: agent.endpoint,
+        })),
+        totalCost: agents.reduce((sum, agent) => sum + parseInt(agent.fee), 0),
+        agentsUsed: agents.map((agent) => agent.name),
+      };
+    }
+
+    const openai = new (await import("openai")).default({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const prompt = `
+Analyze the following query and determine which agents should be used and create subqueries for each agent.
+
+Available agents:
+${agents
+  .map(
+    (agent) => `- ${agent.name}: ${agent.desc} (Fee: ${agent.fee} )`
+  )
+  .join("\n")}
+
+Query: "${query}"
+
+Please respond with a JSON object containing:
+{
+  "subqueries": [
+    {
+      "agent": "Agent Name",
+      "subquery": "Specific task for this agent",
+      "fee": "agent fee"
+    }
+  ],
+  "totalCost": "sum of all fees",
+  "agentsUsed": ["list of agent names"],
+}
+
+Only include agents that are relevant to the query. Be specific about what each agent should do.
+`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an AI orchestration expert. Analyze queries and determine the best agent allocation. Always respond with valid JSON.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 1000,
+      temperature: 0.3,
+    });
+
+    const result = JSON.parse(response.choices[0]?.message?.content || "{}");
+
+    console.log("result", result);
+    // Validate and ensure fees match our agent list
+    const validatedSubqueries =
+      result.subqueries?.map((sq: any) => {
+        const agent = agents.find((a) => a.name === sq.agent);
+        return {
+          ...sq,
+          fee: agent ? agent.fee : "0",
+          endpoint: agent ? agent.endpoint : "",
+        };
+      }) || [];
+
+    const totalCost = validatedSubqueries.reduce(
+      (sum: number, sq: any) => sum + parseInt(sq.fee),
+      0
+    );
+
+    console.log(validatedSubqueries, totalCost, result.agentsUsed);
+
+    return {
+      subqueries: validatedSubqueries,
+      totalCost,
+      agentsUsed: result.agentsUsed || [],
+    };
+  } catch (error) {
+    console.error("Error calculating orchestration cost:", error);
+    // Fallback: use all agents with basic subqueries
+    return {
+      subqueries: agents.map((agent) => ({
+        agent: agent.name,
+        subquery: `Process: ${query}`,
+        fee: agent.fee,
+        endpoint: agent.endpoint,
+      })),
+      totalCost: agents.reduce((sum, agent) => sum + parseInt(agent.fee), 0),
+      agentsUsed: agents.map((agent) => agent.name),
+    };
+  }
+}
+
+// Helper function to process orchestration after payment
+async function processOrchestration(query: string) {
+  try {
+    const orchestrationPlan = await calculateOrchestrationCost(query);
+    const results = [];
+
+    console.log("orchestrationPlan", orchestrationPlan);
+
+    // Process each subquery with the appropriate agent
+    for (const subquery of orchestrationPlan.subqueries) {
+      try {
+        console.log(`🤖 Processing agent: ${subquery.agent}`);
+        console.log(`   Task: ${subquery.subquery}`);
+        console.log(`   Endpoint: ${subquery.endpoint}`);
+        console.log(`   Fee: ${subquery.fee} microALGO`);
+
+        if (!x402Client) {
+          console.warn('⚠️ X402 Client not available, making direct HTTP request');
+          // Fallback to direct HTTP request if X402 client is not available
+          const agentResult = await axios.post(subquery.endpoint, {
+            content: subquery.subquery + " " + query,
+          }, {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            timeout: 30000, // 30 second timeout
+          });
+
+          results.push({
+            agent: subquery.agent,
+            success: true,
+            result: agentResult.data,
+            fee: subquery.fee,
+          });
+        } else {
+          // Use X402 client for payment-enabled requests
+          const agentResult = await x402Client.request(subquery.endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            data: {
+              content: subquery.subquery + " " + query,
+            },
+          });
+
+          results.push({
+            agent: subquery.agent,
+            success: true,
+            result: agentResult,
+            fee: subquery.fee,
+          });
+        }
+
+        console.log(`✅ Agent ${subquery.agent} completed successfully`);
+      } catch (error) {
+        console.error(`❌ Agent ${subquery.agent} failed:`, error);
+        results.push({
+          agent: subquery.agent,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          fee: subquery.fee,
+        });
+      }
+    }
+
+    return {
+      originalQuery: query,
+      orchestrationPlan,
+      results,
+      summary: {
+        totalAgents: orchestrationPlan.subqueries.length,
+        successfulAgents: results.filter((r) => r.success).length,
+        totalCost: orchestrationPlan.totalCost,
+        completionTime: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    throw new Error(
+      `Orchestration processing failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
 
 // Routes
 app.get("/weather", (req, res) => {
@@ -200,6 +563,118 @@ app.get("/video", (req, res) => {
   }
 });
 
+// Orchestration endpoints
+app.get("/get-agents", (req, res) => {
+  res.json({
+    agents,
+  });
+});
+
+// Orchestration endpoint
+app.post("/orchestrate", async (req, res) => {
+  try {
+    const xPaymentHeader = req.headers["x-payment"] as string;
+    const { query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required field: query",
+      });
+    }
+
+    // If payment is provided, process the orchestration
+    if (xPaymentHeader) {
+      // Calculate the expected cost first
+      const orchestrationPlan = await calculateOrchestrationCost(query);
+
+      // Verify payment through facilitator
+      try {
+        const paymentRequest = JSON.parse(xPaymentHeader);
+        const paymentResult = await facilitator.processPayment(paymentRequest);
+
+        if (!paymentResult.isValid) {
+          return res.status(402).json({
+            error: "Payment verification failed",
+            message: paymentResult.error,
+            orchestration: {
+              originalQuery: query,
+              subqueries: orchestrationPlan.subqueries,
+              totalCost: orchestrationPlan.totalCost,
+              agentsUsed: orchestrationPlan.agentsUsed,
+            },
+          });
+        }
+
+        // Process orchestration after payment verification
+        const orchestrationResult = await processOrchestration(query);
+        return res.json({
+          success: true,
+          message: "Orchestration completed successfully",
+          data: orchestrationResult,
+        });
+      } catch (error) {
+        return res.status(402).json({
+          error: "Payment verification failed",
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    // No payment provided, calculate cost and send 402
+    const orchestrationPlan = await calculateOrchestrationCost(query);
+
+    // Create payment request for the total cost
+    const paymentRequest = {
+      recipient: process.env.FACILITATOR_ADDRESS || paymentAddress,
+      amount: orchestrationPlan.totalCost.toString(),
+      token: "APT",
+      description: `Agent orchestration: ${orchestrationPlan.subqueries.length} tasks`,
+      nonce: Date.now().toString(),
+      timestamp: Date.now()
+    };
+
+    // Create custom steps for orchestration
+    const orchestrationSteps = orchestrationPlan.subqueries.map(
+      (subquery: any, index: number) => {
+        const agentName =
+          subquery.agent ||
+          orchestrationPlan.agentsUsed[index] ||
+          `Agent ${index + 1}`;
+        const cost = subquery.fee || 0;
+        const task = subquery.subquery || "Task";
+        return `${agentName} - ${task} - ${cost}`;
+      }
+    );
+
+    // Create 402 response with orchestration details
+    const response = {
+      error: "Payment Required",
+      payment: paymentRequest,
+      instructions: {
+        message: "Payment required for agent orchestration",
+        steps: orchestrationSteps,
+        totalCost: orchestrationPlan.totalCost
+      },
+      orchestration: {
+        originalQuery: query,
+        subqueries: orchestrationPlan.subqueries,
+        totalCost: orchestrationPlan.totalCost,
+        agentsUsed: orchestrationPlan.agentsUsed,
+      },
+    };
+
+    return res.status(402).json(response);
+  } catch (error) {
+    console.error("Orchestration error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 // Free routes (no payment required)
 app.get("/free", (req, res) => {
   res.json({
@@ -254,6 +729,8 @@ app.listen(port, () => {
   console.log(`   POST /api/process      - Process data (0.05 APT)`);
   console.log(`   GET  /data/analytics   - Analytics data (0.02 APT)`);
   console.log(`   GET  /video            - Premium video content (0.05 APT)`);
+  console.log(`   GET  /get-agents       - Get available agents (free)`);
+  console.log(`   POST /orchestrate      - Orchestrate agents (0.1 APT)`);
   console.log(`   GET  /free             - Free content (no payment)`);
   console.log(`   GET  /health           - Health check`);
   
