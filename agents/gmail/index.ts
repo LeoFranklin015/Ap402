@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import { GmailAgent, EmailRequest } from "./agent";
-import { paymentMiddleware, PaymentRoutes } from "../../facilitator/dist";
+import { paymentMiddleware, PaymentRoutes } from "x402-aptos-facilitator";
 
 // Load environment variables
 dotenv.config();

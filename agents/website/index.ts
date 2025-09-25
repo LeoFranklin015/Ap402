@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import { WebsiteBuilder } from "./agent";
 import path from "path";
 import { promises as fs } from "fs";
-import { paymentMiddleware, PaymentRoutes } from "../../facilitator/dist";
+import { paymentMiddleware, PaymentRoutes } from "x402-aptos-facilitator";
 
 // Load environment variables
 dotenv.config();

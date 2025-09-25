@@ -102,12 +102,20 @@ export function useX402Client() {
         // Create REAL blockchain transaction instead of message signature
         console.log('📤 Creating real blockchain transaction...');
         
+        // Get current sequence number for the account to avoid sequence number conflicts
+        const accountInfo = await aptos.getAccountInfo({ accountAddress: account.address.toString() });
+        const currentSequenceNumber = parseInt(accountInfo.sequence_number);
+        console.log('🔢 Current sequence number:', currentSequenceNumber);
+        
         const transaction = await aptos.transaction.build.simple({
           sender: account.address.toString(),
           data: {
             function: '0x1::coin::transfer',
             typeArguments: ['0x1::aptos_coin::AptosCoin'],
             functionArguments: [recipient, BigInt(amount)]
+          },
+          options: {
+            accountSequenceNumber: currentSequenceNumber
           }
         });
         
@@ -260,12 +268,20 @@ export async function x402Request<T = any>(
         fullnode: "https://fullnode.testnet.aptoslabs.com"
       }));
       
+      // Get current sequence number for the account to avoid sequence number conflicts
+      const accountInfo = await aptos.getAccountInfo({ accountAddress: walletAccount.address.toString() });
+      const currentSequenceNumber = parseInt(accountInfo.sequence_number);
+      console.log('🔢 Current sequence number:', currentSequenceNumber);
+      
       const transaction = await aptos.transaction.build.simple({
         sender: walletAccount.address.toString(),
         data: {
           function: '0x1::coin::transfer',
           typeArguments: ['0x1::aptos_coin::AptosCoin'],
           functionArguments: [recipient, BigInt(amount)]
+        },
+        options: {
+          accountSequenceNumber: currentSequenceNumber
         }
       });
       
