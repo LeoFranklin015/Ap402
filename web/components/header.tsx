@@ -14,14 +14,6 @@ export function Header() {
     { name: "Agents", href: "/agents" },
   ]
 
-  const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault()
-    const targetId = href.substring(1) // Remove '#' from href
-    const targetElement = document.getElementById(targetId)
-    if (targetElement) {
-      targetElement.scrollIntoView({ behavior: "smooth" })
-    }
-  }
 
   return (
     <header className="w-full py-4 px-6">
@@ -35,7 +27,6 @@ export function Header() {
               <Link
                 key={item.name}
                 href={item.href}
-                onClick={(e) => handleScroll(e, item.href)} // Add onClick handler
                 className="text-[#888888] hover:text-foreground px-4 py-2 rounded-full font-medium transition-colors"
               >
                 {item.name}
@@ -61,7 +52,6 @@ export function Header() {
                   <Link
                     key={item.name}
                     href={item.href}
-                    onClick={(e) => handleScroll(e, item.href)} // Add onClick handler
                     className="text-[#888888] hover:text-foreground justify-start text-lg py-2"
                   >
                     {item.name}
