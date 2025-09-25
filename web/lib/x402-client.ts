@@ -28,8 +28,12 @@ export interface X402Response<T = any> {
 
 // React hook for x402 operations
 export function useX402Client() {
-  const { account, connected, signMessage } = useWallet();
-  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  const { account, connected, signTransaction, network } = useWallet();
+  
+  // Force testnet for testing
+  const aptos = new Aptos(new AptosConfig({ 
+    network: Network.TESTNET
+  }));
 
   const x402fetch = async <T = any>(
     url: string,
@@ -40,9 +44,7 @@ export function useX402Client() {
     }
 
     // Debug: Check what methods are available
-    console.log('Available wallet methods:', {
-      signMessage: !!signMessage
-    });
+
 
     try {
       // First attempt - try to get the resource
@@ -97,27 +99,34 @@ export function useX402Client() {
         console.log('Final amount:', amount);
         console.log('Amount as BigInt:', BigInt(amount));
         
-        // Create payment proof using signMessage (most reliable method)
-        const message = JSON.stringify({
-          recipient,
-          amount,
-          timestamp: Date.now(),
-          nonce: paymentDetails.nonce || Date.now().toString()
+        // Create REAL blockchain transaction instead of message signature
+        console.log('📤 Creating real blockchain transaction...');
+        
+        const transaction = await aptos.transaction.build.simple({
+          sender: account.address.toString(),
+          data: {
+            function: '0x1::coin::transfer',
+            typeArguments: ['0x1::aptos_coin::AptosCoin'],
+            functionArguments: [recipient, BigInt(amount)]
+          }
         });
         
-        const paymentProof = await signMessage({
-          message: message,
-          nonce: paymentDetails.nonce || Date.now().toString()
-        });
+        console.log('✅ Transaction built:', transaction);
         
-        console.log('✅ Payment message signed:', paymentProof);
+        // Sign the REAL transaction
+        const senderAuthenticator = await signTransaction({
+          transactionOrPayload: transaction
+        });
+        console.log('✅ Transaction signed:', senderAuthenticator);
 
-        // Create payment proof for the server
+        // Create payment proof with REAL transaction
         const payment: X402Payment = {
-          transaction: JSON.stringify(paymentProof, (key, value) =>
+          transaction: JSON.stringify(transaction, (key, value) =>
             typeof value === 'bigint' ? value.toString() : value
           ),
-          signature: paymentProof.signature?.toString() || paymentProof.fullMessage || '',
+          signature: JSON.stringify(senderAuthenticator, (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+          ),
           publicKey: account.publicKey?.toString() || '',
           address: account.address.toString(),
           timestamp: Date.now()
@@ -245,27 +254,36 @@ export async function x402Request<T = any>(
       const amount = paymentDetails.amount ? String(paymentDetails.amount) : '1000000';
       const recipient = paymentDetails.recipient || '0x1';
       
-      // Create payment proof using signMessage
-      const message = JSON.stringify({
-        recipient,
-        amount,
-        timestamp: Date.now(),
-        nonce: paymentDetails.nonce || Date.now().toString()
+      // Create REAL blockchain transaction - force testnet
+      const aptos = new Aptos(new AptosConfig({ 
+        network: Network.TESTNET,
+        fullnode: "https://fullnode.testnet.aptoslabs.com"
+      }));
+      
+      const transaction = await aptos.transaction.build.simple({
+        sender: walletAccount.address.toString(),
+        data: {
+          function: '0x1::coin::transfer',
+          typeArguments: ['0x1::aptos_coin::AptosCoin'],
+          functionArguments: [recipient, BigInt(amount)]
+        }
       });
       
-      const paymentProof = await signMessageFn({
-        message: message,
-        nonce: paymentDetails.nonce || Date.now().toString()
+      // Sign the REAL transaction
+      const senderAuthenticator = await signMessageFn({
+        transactionOrPayload: transaction
       });
       
-      console.log('✅ Payment message signed:', paymentProof);
+      console.log('✅ Real transaction signed:', senderAuthenticator);
 
-      // Create payment proof for the server
+      // Create payment proof with REAL transaction
       const payment: X402Payment = {
-        transaction: JSON.stringify(paymentProof, (key, value) =>
+        transaction: JSON.stringify(transaction, (key, value) =>
           typeof value === 'bigint' ? value.toString() : value
         ),
-        signature: paymentProof.signature?.toString() || paymentProof.fullMessage || '',
+        signature: JSON.stringify(senderAuthenticator, (key, value) =>
+          typeof value === 'bigint' ? value.toString() : value
+        ),
         publicKey: walletAccount.publicKey?.toString() || '',
         address: walletAccount.address.toString(),
         timestamp: Date.now()

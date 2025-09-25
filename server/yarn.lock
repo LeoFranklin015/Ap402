@@ -1073,7 +1073,7 @@ wrappy@1:
   integrity sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==
 
 "x402-aptos-facilitator@file:../facilitator":
-  version "1.0.0"
+  version "1.0.1"
   resolved "file:../facilitator"
   dependencies:
     "@aptos-labs/ts-sdk" "^1.0.0"

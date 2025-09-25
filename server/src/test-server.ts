@@ -21,7 +21,7 @@ const paymentAddress = process.env.PAYMENT_ADDRESS || '0xbcfb4a60c030cb5dcab8adc
 const facilitator = new AptosFacilitator({
   aptosNetwork: 'testnet',
   port: 4021,
-  mockMode: true
+  mockMode: false
 });
 
 // X402 Client for agent communication
@@ -216,8 +216,112 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Apply x402 payment middleware using the SDK
-app.use(paymentMiddleware(
+// Create custom payment middleware with real transactions
+import { createPaymentMiddleware } from 'x402-aptos-facilitator';
+
+// Create custom payment middleware that disables mock mode
+const customPaymentMiddleware = (payTo: string, routes: PaymentRoutes, options: { url: string }) => {
+  const config = {
+    aptosNetwork: 'testnet' as const,
+    port: 4021,
+    mockMode: false // Disable mock mode for real transactions
+  };
+
+  const facilitator = new AptosFacilitator(config);
+
+  return async (req: any, res: any, next: any) => {
+    try {
+      // Check if this route requires payment
+      const route = findMatchingRoute(req.path, routes);
+      
+      if (!route) {
+        return next();
+      }
+
+      // Check if payment is already provided in X-Payment header
+      const paymentHeader = req.headers['x-payment'] as string;
+      
+      if (!paymentHeader) {
+        // Payment required - return 402
+        return res.status(402).json({
+          payment: {
+            amount: route.price,
+            token: '0x1::aptos_coin::AptosCoin',
+            recipient: payTo,
+            deadline: Date.now() + (5 * 60 * 1000)
+          },
+          message: 'Payment required to access this resource',
+          retryAfter: 5
+        });
+      }
+
+      // Parse payment request
+      let paymentRequest: any;
+      try {
+        paymentRequest = JSON.parse(paymentHeader);
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Invalid payment header format'
+        });
+      }
+
+      // Verify payment with facilitator (now using real transactions)
+      const verification = await facilitator.processPayment(paymentRequest);
+
+      if (!verification.isValid) {
+        return res.status(402).json({
+          payment: {
+            amount: route.price,
+            token: '0x1::aptos_coin::AptosCoin',
+            recipient: payTo,
+            deadline: Date.now() + (5 * 60 * 1000)
+          },
+          message: `Payment verification failed: ${verification.error}`,
+          retryAfter: 5
+        });
+      }
+
+      // Payment verified - add transaction info to request
+      req.paymentVerification = verification;
+      req.transactionHash = verification.transactionHash;
+
+      console.log('✅ Payment verified for:', req.path);
+      console.log('Transaction Hash:', verification.transactionHash);
+
+      next();
+
+    } catch (error) {
+      console.error('Payment middleware error:', error);
+      res.status(500).json({
+        error: 'Internal server error in payment processing'
+      });
+    }
+  };
+};
+
+// Helper function to find matching route
+function findMatchingRoute(path: string, routes: PaymentRoutes): any {
+  // Check exact match first
+  if (routes[path]) {
+    return routes[path];
+  }
+
+  // Check wildcard patterns
+  for (const [routePath, routeConfig] of Object.entries(routes)) {
+    if (routePath.includes('*')) {
+      const pattern = routePath.replace(/\*/g, '.*');
+      const regex = new RegExp(`^${pattern}$`);
+      if (regex.test(path)) {
+        return routeConfig;
+      }
+    }
+  }
+
+  return null;
+}
+
+// Apply custom x402 payment middleware with real transactions
+app.use(customPaymentMiddleware(
   paymentAddress,
   paymentRoutes,
   { url: `http://localhost:${port}` }
@@ -346,7 +450,7 @@ async function processOrchestration(query: string) {
         console.log(`🤖 Processing agent: ${subquery.agent}`);
         console.log(`   Task: ${subquery.subquery}`);
         console.log(`   Endpoint: ${subquery.endpoint}`);
-        console.log(`   Fee: ${subquery.fee} microALGO`);
+        console.log(`   Fee: ${subquery.fee} `);
 
         if (!x402Client) {
           console.warn('⚠️ X402 Client not available, making direct HTTP request');
