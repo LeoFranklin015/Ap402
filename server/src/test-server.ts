@@ -47,11 +47,11 @@ class X402Client {
   // Create payment transaction for agent
   async createPaymentTransaction(recipient: string, amount: string) {
     try {
-      console.log(`💰 Creating payment transaction for agent...`);
+      console.log(`�� Creating payment transaction for agent...`);
       console.log(`   To: ${recipient}`);
       console.log(`   Amount: ${amount} octas`);
-
-      // Build the transaction
+  
+      // Build the transaction - let the SDK handle sequence numbers automatically
       const transaction = await this.aptos.transaction.build.simple({
         sender: this.account.accountAddress.toString(),
         data: {
@@ -59,21 +59,18 @@ class X402Client {
           typeArguments: ['0x1::aptos_coin::AptosCoin'],
           functionArguments: [recipient, BigInt(amount)]
         }
+        // Remove explicit sequence number - let SDK handle it automatically
       });
-
+  
       // Sign the transaction
       const senderAuthenticator = this.aptos.transaction.sign({
         signer: this.account,
         transaction
       });
-
+  
       return {
-        transaction: JSON.stringify(transaction, (key: string, value: any) =>
-          typeof value === 'bigint' ? value.toString() : value
-        ),
-        signature: JSON.stringify(senderAuthenticator, (key: string, value: any) =>
-          typeof value === 'bigint' ? value.toString() : value
-        ),
+        transaction: transaction,
+        signature: senderAuthenticator,
         publicKey: this.account.publicKey.toString(),
         address: this.account.accountAddress.toString(),
         timestamp: Date.now()
@@ -138,13 +135,13 @@ class X402Client {
       }
 
       throw new Error(`Request failed: ${response.status} ${response.statusText}`);
-    } catch (error) {
+ 
+   } catch (error) {
       console.error('❌ X402 request failed:', error);
       throw error;
     }
   }
 }
-
 // Initialize X402 client
 let x402Client: X402Client | null = null;
 try {
